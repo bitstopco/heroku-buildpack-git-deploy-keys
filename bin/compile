@@ -9,6 +9,7 @@ build_dir    = ARGV[0]
 cache_dir    = ARGV[1]
 env_dir      = ARGV[2]
 ssh_dir      = File.expand_path "#{ENV['HOME']}/.ssh"
+profile_dir  = File.expand_path "#{build_dir}/.profile.d"
 
 def alert(str)
   str.split('\n').each do |line|
@@ -98,6 +99,16 @@ end
 FileUtils.chmod 0600, "#{ssh_dir}/id_rsa"
 arrow "Wrote ssh key to user's ssh dir"
 
+# Create the ssh directory on the server
+Dir.mkdir("#{build_dir}/.ssh", 0700) unless File.exists?("#{build_dir}/.ssh")
+
+# Create id_rsa file and write contents
+File.open "#{build_dir}/.ssh/id_rsa", 'w' do |f|
+  f.write ssh_key
+end
+FileUtils.chmod 0600, "#{build_dir}/.ssh/id_rsa"
+arrow "Wrote ssh key to build's ssh dir"
+
 #create known_hosts file and write contents
 File.open "#{ssh_dir}/known_hosts", 'w' do |f|
   f.write host_hash
@@ -114,3 +125,14 @@ end
 FileUtils.chmod 0600, "#{ssh_dir}/config"
 arrow "Wrote config to user's config"
 
+# Make the profile.d dir for scripts to run at dyno start time and add a script for launching ssh-agent
+Dir.mkdir(profile_dir, 0700) unless File.exists?(profile_dir)
+
+File.open "#{profile_dir}/launch_ssh_agent.sh", 'w' do |f|
+  f.puts """
+#!/usr/bin/env bash
+eval `ssh-agent -s`
+ssh-add #{ssh_dir}/id_rsa
+"""
+end
+arrow "Wrote launch script for ssh-agent"
